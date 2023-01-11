@@ -1,0 +1,16 @@
+Scoring_Player_0 = "Ruud Gullit"
+Scoring_Player_1 = "Marco van Basten"
+goal_0 = 32
+goal_1 = 54
+scorers = Scoring_Player_0 + " " + str(goal_0) + ", "+ Scoring_Player_1 + " " + str(goal_1)
+report = f'{Scoring_Player_0} scored in the {goal_0}nd minute\n{Scoring_Player_1} scored in the {goal_1}th minute'
+
+#Part 2
+
+player = 'Berry van Aerle'
+first_name = player[:player.find(' ')]
+last_name_len = len( player [player.find(' ')+1:])
+first_name_len = len(first_name)
+name_short = player[:1] + ". "+ player [player.find(' ')+1:]
+chant = (first_name + "! ") *(first_name_len -1) + first_name + "!"
+good_chant = chant[::-1]!=" "
