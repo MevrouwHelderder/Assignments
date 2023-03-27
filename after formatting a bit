@@ -1,0 +1,952 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "mount_file_id": "1qZMXOF2HeaNzOgS0Q_R7qr8VoCRe8Xc6",
+      "authorship_tag": "ABX9TyMDZ2uZ8akfdvXEQZ9acAh+",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/MevrouwHelderder/Assignments/blob/main/after%20formatting%20a%20bit\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "%load_ext google.colab.data_table"
+      ],
+      "metadata": {
+        "id": "-GTLoS1qovCO"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Importing the essentials\n",
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "import matplotlib.pyplot as plt\n",
+        "import re\n",
+        "\n",
+        "# importing the dataframe\n",
+        "path = \"/content/drive/MyDrive/attacks.csv\"\n",
+        "attacks = pd.read_csv(path, encoding=\"ISO-8859-1\")\n",
+        "# Dropping columns.\n",
+        "attacks_drop_columns = attacks.drop(\n",
+        "    columns=[\n",
+        "        \"Date\",\n",
+        "        \"Year\",\n",
+        "        \"Country\",\n",
+        "        \"Area\",\n",
+        "        \"Location\",\n",
+        "        \"Name\",\n",
+        "        \"Sex \",\n",
+        "        \"Time\",\n",
+        "        \"Investigator or Source\",\n",
+        "        \"pdf\",\n",
+        "        \"href formula\",\n",
+        "        \"href\",\n",
+        "        \"Case Number.1\",\n",
+        "        \"Case Number.2\",\n",
+        "        \"original order\",\n",
+        "        \"Unnamed: 22\",\n",
+        "        \"Unnamed: 23\",\n",
+        "    ]\n",
+        ")\n",
+        "# Renaming columns.\n",
+        "attacks_renamed = attacks_drop_columns.rename(\n",
+        "    columns={\"Case Number\": \"Case\", \"Fatal (Y/N)\": \"Fatal\", \"Species \": \"Species\"}\n",
+        ")\n",
+        "# Dropping rows.\n",
+        "# Making a copy to prevent view vs copy issues later on.\n",
+        "relevant_columns = list(attacks_renamed.columns[1:])\n",
+        "attacks_drop_rows = attacks_renamed.dropna(subset=relevant_columns, how=\"all\").copy()\n",
+        "# Preparing the functions for locating and adjusting the missing values.\n",
+        "def print_separator(sep, num, msg):\n",
+        "    print(\"\\n\")\n",
+        "    print(sep * num)\n",
+        "    print(f\"{msg}\")\n",
+        "    print(sep * num)\n",
+        "\n",
+        "\n",
+        "# TACTIC A: find unique values\n",
+        "def look_at_unique_values(column):\n",
+        "    unique_values_cutoff = 50\n",
+        "    unique_values = column.unique()\n",
+        "    num_unique_values = len(unique_values)\n",
+        "    if num_unique_values == len(column):\n",
+        "        print(f\"Each value in the column is unique (total: {num_unique_values})\")\n",
+        "    elif num_unique_values < unique_values_cutoff:\n",
+        "        print(f\"Less than {unique_values_cutoff} unique values:\")\n",
+        "        try:\n",
+        "            sorted = np.sort(unique_values)\n",
+        "            print(\"Values are sorted\")\n",
+        "            display(list(sorted))\n",
+        "        except:\n",
+        "            print(\"Could not sort values\")\n",
+        "            display(list(unique_values))\n",
+        "    else:\n",
+        "        print(\n",
+        "            f\"More than {unique_values_cutoff} unique values (total: {num_unique_values})\"\n",
+        "        )\n",
+        "\n",
+        "\n",
+        "# TACTIC B: look at the edges\n",
+        "def look_at_edges(df, column_name):\n",
+        "    # inner function\n",
+        "    def show_head_and_tail(values):\n",
+        "        num_items_to_slice = 10\n",
+        "        display(list(values)[:num_items_to_slice])\n",
+        "        display(list(values)[-num_items_to_slice:])\n",
+        "\n",
+        "    column = df[column_name]\n",
+        "    unique_values = column.unique()\n",
+        "    try:\n",
+        "        sorted = np.sort(unique_values)\n",
+        "        print(\"Unique values sorted, head and tail:\")\n",
+        "        show_head_and_tail(sorted)\n",
+        "    except TypeError as error:\n",
+        "        print(f\"Could not sort values: {error}\")\n",
+        "        print(\"..so let's try filtering NULL values and then sorting\")\n",
+        "        print(\"..there could be a black sheep in the null values\")\n",
+        "        non_null_uniques = df.loc[~df[column_name].isnull(), column_name].unique()\n",
+        "        sorted = np.sort(non_null_uniques)\n",
+        "        show_head_and_tail(sorted)\n",
+        "\n",
+        "\n",
+        "# TACTIC C: casting to a type to see if all the values match the needed type\n",
+        "def cast_to_type(column, maybe_type):\n",
+        "    try:\n",
+        "        column.astype(maybe_type)\n",
+        "        print(f\"Casting to {maybe_type} was successful\")\n",
+        "    except ValueError as error:\n",
+        "        print(f\"Could not cast to {maybe_type}: {error}\")\n",
+        "\n",
+        "\n",
+        "# TACTIC D: display the value count of the column\n",
+        "def value_count(column):\n",
+        "    display(column.value_counts(dropna=False))\n",
+        "\n",
+        "\n",
+        "# FUNCTION TO CHECK THE DATAFRAME FOR ALL FOUR TACTICS\n",
+        "def find_non_default_missing_values(df, column_name, maybe_type):\n",
+        "    long_separator_amount = 80\n",
+        "    short_separator_amount = 40\n",
+        "    # Print the header\n",
+        "    print_separator(\n",
+        "        \"*\",\n",
+        "        long_separator_amount,\n",
+        "        f'Finding non default missing values for column \"{column_name}\"',\n",
+        "    )\n",
+        "    print(f'Column \"{column_name}\" has datatype: {df.dtypes[column_name]}')\n",
+        "    column = df[column_name]\n",
+        "    # A\n",
+        "    print_separator(\"-\", short_separator_amount, \"A: Looking at unique values\")\n",
+        "    look_at_unique_values(column)\n",
+        "    # B\n",
+        "    print_separator(\"-\", short_separator_amount, \"B: Sorting and looking at the edges\")\n",
+        "    look_at_edges(df, column_name)\n",
+        "    # C\n",
+        "    print_separator(\"-\", short_separator_amount, f\"C: Casting to type: {maybe_type}\")\n",
+        "    cast_to_type(column, maybe_type)\n",
+        "    # D\n",
+        "    print_separator(\n",
+        "        \"-\",\n",
+        "        short_separator_amount,\n",
+        "        \"D: Looking at frequency\\nAll default-NULL values will be bunched together as NaN\",\n",
+        "    )\n",
+        "    value_count(column)\n",
+        "    print(\"\\n\")\n",
+        "\n",
+        "\n",
+        "# Function to replace non-default NULL values with default NULL values.\n",
+        "# ⚠️ Mutates df\n",
+        "def replace_value(df, column_name, missing_old, missing_new):\n",
+        "    df[column_name] = df[column_name].replace({missing_old: missing_new})\n",
+        "\n",
+        "\n",
+        "# Function to display the default NULL values in the column.\n",
+        "def display_default_null_values(df, column_name):\n",
+        "    nulls = df.loc[df[column_name].isnull()]\n",
+        "    print(f'Number of default null values in \"{column_name}\": {len(nulls)}')\n",
+        "\n",
+        "\n",
+        "# Easier to type\n",
+        "nat = np.datetime64(\"nat\")\n",
+        "# Making a deep copy of the dataframe.\n",
+        "attacks_clean = attacks_drop_rows.copy(deep=True)\n",
+        "# Lowercase all strings and strip whitespace and/or quotationmarks around strings\n",
+        "attacks_clean = attacks_clean.applymap(lambda x: x.lower() if isinstance(x, str) else x)\n",
+        "attacks_clean = attacks_clean.applymap(\n",
+        "    lambda x: x.strip('\" ') if isinstance(x, str) else x\n",
+        ")\n",
+        "# Column Type\n",
+        "attacks_clean = attacks_clean.replace(\n",
+        "    {\"Type\": {np.nan: None, \"Boating\": \"Boat\", \"Boatomg\": \"Boat\"}}\n",
+        ")\n",
+        "# Column Activity\n",
+        "attacks_clean[\"Activity\"] = attacks_clean[\"Activity\"].replace({\".\": None})\n"
+      ],
+      "metadata": {
+        "id": "ltB1M1HWb8NX"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Column: Species\n",
+        "\n",
+        "First let me apologize for the amount stuff done that is probably technically not all needed for this assignment ;-)\n",
+        "I had a blast cleaning op this column and I used it to practice a lot of new skills.\n",
+        "Also: I recognise that in real life it would probably almost always be a waste of time to refine values that occur only a few times but I appreciated the practice ;-)"
+      ],
+      "metadata": {
+        "id": "WxHdZoHMGxbr"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# First steps cleaning up:\n",
+        "# Goal:\n",
+        "# extract the species from the string where possible, change null values\n",
+        "# Steps:\n",
+        "# If null value return: \"no species confirmed\"\n",
+        "# If there already is \"no species confirmed\": return the original value\n",
+        "# If the word shark is present: return that word plus the predecessing word\n",
+        "# If there is anything else: add \"check: \" and return the original value\n",
+        "\n",
+        "\n",
+        "def tidy(x):\n",
+        "    if pd.isna(x):\n",
+        "        return \"no species confirmed\"\n",
+        "    elif len(x.strip()) == 0:\n",
+        "        return \"no species confirmed\"\n",
+        "    elif \"shark\" in x:\n",
+        "        return re.search(r\"(\\S+\\s*)?shark\", x).group()\n",
+        "    elif \"no species confirmed\" in x:\n",
+        "        return x\n",
+        "    else:\n",
+        "        return f\"check: {x}\"\n",
+        "\n",
+        "\n",
+        "attacks_clean[\"Species\"] = attacks_clean[\"Species\"].apply(tidy)\n",
+        "\n",
+        "# Things we can safely change to \"no species confirmed\":\n",
+        "no_species = [\n",
+        "    \"invalid\",\n",
+        "    \"unidentified\",\n",
+        "    \"questionable\",\n",
+        "    \"possibly\",\n",
+        "    \"not confirmed\",\n",
+        "    \"unconfirmed\",\n",
+        "    \"doubtful\",\n",
+        "    \"captive\",\n",
+        "    \"unknown\",\n",
+        "    \"several\",\n",
+        "    \"colored\",\n",
+        "]\n",
+        "\n",
+        "# one or more digits followed by ' or \" followed by\n",
+        "# zero or more ] followed by shark, whitespaces optional\n",
+        "inches = r'\\d+\\s*([\"\\']{1,})\\s*\\]*\\s*shark'\n",
+        "\n",
+        "# string containing two or less letters or digits or -\n",
+        "# followed by shark, whitespaces optional\n",
+        "small_string = r\"^[a-z0-9-]{0,2}\\s*shark$\"\n",
+        "\n",
+        "# lb or kg or foot followed by zero or more ] followed by shark, whitespaces optional\n",
+        "measurements = r\"(kg|lb|foot)\\s*\\]*\\s*shark\"\n",
+        "\n",
+        "\n",
+        "def tidy_more(x):\n",
+        "    if (\n",
+        "        any(word in x for word in no_species)\n",
+        "        or re.search(inches, x)\n",
+        "        or re.search(small_string, x)\n",
+        "        or re.search(measurements, x)\n",
+        "    ):\n",
+        "        return \"no species confirmed\"\n",
+        "    else:\n",
+        "        return x\n",
+        "\n",
+        "\n",
+        "attacks_clean[\"Species\"] = attacks_clean[\"Species\"].apply(tidy_more)\n",
+        "\n",
+        "# removing quotation marks and this weird little fellas that look the same but are different:  \n",
+        "attacks_clean[\"Species\"] = attacks_clean[\"Species\"].apply(\n",
+        "    lambda x: re.sub(r'[\"]+', \"\", x)\n",
+        ")\n",
+        "\n",
+        "# Checking all values that I previously marked as 'check'\n",
+        "mask = attacks_clean.Species.str.contains(\"check\").values\n",
+        "attacks_clean.loc[mask, \"Species\"]\n",
+        "\n",
+        "# Changing to the right species where possible\n",
+        "correct_species = [\n",
+        "    \"blue pointer\",\n",
+        "    \"wobbegong\",\n",
+        "    \"whaler\",\n",
+        "    \"hammerhead\",\n",
+        "    \"porbeagle\",\n",
+        "    \"whitetip\",\n",
+        "    \"horn\",\n",
+        "]\n",
+        "\n",
+        "\n",
+        "def correct_checks(x):\n",
+        "    if \"check\" in x:\n",
+        "        for word in correct_species:\n",
+        "            if word in x:\n",
+        "                return f\"{word} shark\"\n",
+        "        else:\n",
+        "            return \"no species confirmed\"\n",
+        "    else:\n",
+        "        return x\n",
+        "\n",
+        "\n",
+        "attacks_clean[\"Species\"] = attacks_clean[\"Species\"].apply(lambda x: correct_checks(x))\n",
+        "\n",
+        "# Last crumbs to clean up:\n",
+        "# attacks_clean['Species'].value_counts().head(50)\n",
+        "# attacks_clean['Species'].value_counts().tail(50)\n",
+        "\n",
+        "useless = [\n",
+        "    \"large shark\",\n",
+        "    \"female shark\",\n",
+        "    \"grey shark\",\n",
+        "    \"two shark\",\n",
+        "    \"the shark\",\n",
+        "    \"from shark\",\n",
+        "    \"little shark\",\n",
+        "    \"larger shark\",\n",
+        "    \"red shark\",\n",
+        "    \"young shark\",\n",
+        "    \"for shark\",\n",
+        "    \"metre shark\",\n",
+        "    \"juvenile shark\",\n",
+        "    \"gray shark\",\n",
+        "    \"finned shark\",\n",
+        "]\n",
+        "attacks_clean[\"Species\"] = attacks_clean[\"Species\"].replace(\n",
+        "    dict.fromkeys(useless, \"no species confirmed\")\n",
+        ")\n",
+        "\n",
+        "attacks_clean[\"Species\"] = attacks_clean[\"Species\"].replace(\n",
+        "    dict.fromkeys(\n",
+        "        [\"seven-gill shark\", \"7-gill shark\", \"sevengill  shark\"], \"sevengill shark\"\n",
+        "    )\n",
+        ")\n",
+        "attacks_clean[\"Species\"] = attacks_clean[\"Species\"].replace(\n",
+        "    dict.fromkeys([\"black-tipped shark\", \"blacktip  shark\"], \"blacktip shark\")\n",
+        ")\n",
+        "attacks_clean[\"Species\"] = attacks_clean[\"Species\"].replace(\n",
+        "    {\"sand shark\": \"sandshark\", \"zambesi shark\": \"zambezi shark\"}\n",
+        ")\n",
+        "\n",
+        "# Those last values are probably useless but since there is no way to definitively know if they represent a real species or not I'll leave them as is for now.\n"
+      ],
+      "metadata": {
+        "id": "BMuCpcDCbvV5"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "\n",
+        " # Column fatal\n",
+        "# Check column 'Fatal' for missing values\n",
+        "# find_non_default_missing_values(attacks_clean, 'Fatal', 'bool')\n",
+        "# display(attacks_clean.loc[(attacks_clean['Fatal']== False) | (attacks_clean['Fatal']== True)])\n",
+        "# Replacing values that are clear about their meaning with their boolean equivalents \n",
+        "# attacks_clean['Fatal'] = attacks_clean['Fatal'].replace(dict.fromkeys(['y'], True))\n",
+        "# attacks_clean['Fatal'] = attacks_clean['Fatal'].replace(dict.fromkeys(['n'], False))\n",
+        "# replace_value(attacks_clean, 'Fatal', 'y', True)\n",
+        "# replace_value(attacks_clean, 'Fatal', 'n', False)\n",
+        "# Change values that are not clear to None for now, might remove them later.\n",
+        "# df[column_name].replace({missing_old: missing_new})\n",
+        "# non_bool = attacks_clean.loc[~((attacks_clean['Fatal'] == False) | (attacks_clean['Fatal'] == True))]\n",
+        "# attacks_clean['Fatal'] = attacks_clean['Fatal'].replace({missing_old: missing_new})\n",
+        "# attacks_clean['Fatal'] = attacks_clean.loc[~((attacks_clean['Fatal'] == False) | (attacks_clean['Fatal'] == True))] = None"
+      ],
+      "metadata": {
+        "id": "hpK0t3qAcjSa"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Column Age\n",
+        "# Check column 'Age' for missing values\n",
+        "# find_non_default_missing_values(attacks_clean, 'Age', 'string')\n",
+        "# Strip the leading/trailing whitespace and quotation marks.\n",
+        "# attacks_clean['Age'] = attacks_clean['Age'].str.strip('\"\\' \\()\\\\')\n",
+        "# Replace \\xa0 and np.nan with None\n",
+        "# attacks_clean['Age'] = attacks_clean['Age'].replace(dict.fromkeys(['\\xa0',np.nan], None))\n",
+        "# There are a lot of unclear ages. Since we want to know if there is a difference \n",
+        "# between children and adults I think it is best to divide them into adult and child\n",
+        "# Transform the column so all clear numericals are in the right categories\n",
+        "# attacks_clean.transform({'Age': str.capitalize, \"price\": lambda price: round(price * 1.1)})"
+      ],
+      "metadata": {
+        "id": "jioMv3YPckwS"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "\n",
+        "\n",
+        "\n",
+        "\n",
+        "---\n",
+        "\n",
+        "\n",
+        "\n",
+        "---\n",
+        "\n",
+        "\n",
+        "\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "RE_P9PETZKCF"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "#Take [this](https://www.kaggle.com/felipeesc/shark-attack-dataset) dataset. \n",
+        "Use all the skills you've learned up until now to answer the following questions as well as possible. \n",
+        "\n",
+        "* What are the most dangerous types of sharks to humans? \n",
+        "* Are children more likely to be attacked by sharks? \n",
+        "* Are shark attacks where sharks were provoked more or less dangerous? \n",
+        "* Are certain activities more likely to result in a shark attack? \n",
+        "\n",
+        "If you feel you can't answer a question based on the dataset alone, feel free to find other datasets and use them in answering the questions.\n",
+        "\n",
+        "For each answer you give not only answer the question but also write about the assumptions you made in answering the question. If an assumption or decision possibly created a bias please write about this as well."
+      ],
+      "metadata": {
+        "id": "6iqx3txEtF1T"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# # Importing the essentials\n",
+        "# import numpy as np\n",
+        "# import pandas as pd\n",
+        "# import matplotlib.pyplot as plt\n",
+        "# import re\n",
+        "\n",
+        "# %load_ext google.colab.data_table"
+      ],
+      "metadata": {
+        "id": "Nqq0ZQOowUjX"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# # importing the dataframe\n",
+        "# path = '/content/drive/MyDrive/attacks.csv'"
+      ],
+      "metadata": {
+        "id": "JpFkzHcMwXPE"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# attacks = pd.read_csv(path, encoding=\"ISO-8859-1\")"
+      ],
+      "metadata": {
+        "id": "GtorpkT9672f"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## **Part 1: Rows and columns**\n",
+        "\n",
+        "**COLUMNS**: There are columns regarding the date, time and location that seem to be irrelevant to the questions asked.\n",
+        "\n",
+        "However, I'm not sure if I might need them later on, for example during imputation.\n",
+        "\n",
+        "For now I will remove all seemingly irrelevant columns but I might come back to this later.<br><br>\n",
+        "**ROWS**: There seem to be a lot of rows where all values or all values except the 'Case Number' is NaN.\n",
+        "\n",
+        "Since only a case number but no other data is useless in this case let's remove those rows."
+      ],
+      "metadata": {
+        "id": "hHxHxeiqdUku"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# # Dropping columns.\n",
+        "\n",
+        "# attacks_drop_columns = attacks.drop(columns=['Date', 'Year','Country', 'Area', 'Location','Name', 'Sex ', 'Time', 'Investigator or Source', 'pdf', 'href formula', 'href',\n",
+        "#        'Case Number.1', 'Case Number.2', 'original order', 'Unnamed: 22',\n",
+        "#        'Unnamed: 23'])"
+      ],
+      "metadata": {
+        "id": "HHcLP4Y-DDeu"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# # Checking the names of the columns to see if anything needs to be adjusted.\n",
+        "\n",
+        "# attacks_drop_columns.columns"
+      ],
+      "metadata": {
+        "id": "d3ijCZuXK7YY"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# # Renaming columns.\n",
+        "\n",
+        "# attacks_renamed = attacks_drop_columns.rename(columns={'Case Number': 'Case', 'Fatal (Y/N)': 'Fatal', 'Species ': 'Species' })\n",
+        "\n",
+        "# # Checking the names of the columns to see if everything went well.\n",
+        "\n",
+        "# display (attacks_renamed.columns)"
+      ],
+      "metadata": {
+        "id": "CpizZHVcKmjI"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# # Dropping rows.\n",
+        "# # Making a copy to prevent view vs copy issues later on.\n",
+        "\n",
+        "# relevant_columns = list(attacks_renamed.columns[1:])\n",
+        "\n",
+        "# attacks_drop_rows = attacks_renamed.dropna(subset=relevant_columns, how='all').copy()\n"
+      ],
+      "metadata": {
+        "id": "owxYlykBJOAS"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## **Part 2: Missing values**\n",
+        "Time to find default and non-default missing values. \n",
+        "I will use the tactics and functions we also used in an earlier exercise. \n",
+        "\n",
+        "I realize those functions aren't my own but I figured it would be useless to change a bit and pretend it is my own when it is much more important to show I now how and when to use the functions.\n",
+        "So... credit to Winc and off to the next part!"
+      ],
+      "metadata": {
+        "id": "cX1fcklYiaZU"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# # Preparing the functions for locating and adjusting the missing values.\n",
+        "\n",
+        "# def print_separator(sep, num, msg):\n",
+        "#   print(\"\\n\")\n",
+        "#   print(sep * num)\n",
+        "#   print(f\"{msg}\")\n",
+        "#   print(sep * num)\n",
+        "\n",
+        "# # TACTIC A: find unique values\n",
+        "# def look_at_unique_values(column): \n",
+        "#   unique_values_cutoff = 50\n",
+        "#   unique_values = column.unique()\n",
+        "#   num_unique_values = len(unique_values)\n",
+        "#   if num_unique_values == len(column):\n",
+        "#     print(f\"Each value in the column is unique (total: {num_unique_values})\")\n",
+        "#   elif num_unique_values < unique_values_cutoff: \n",
+        "#     print(f\"Less than {unique_values_cutoff} unique values:\")\n",
+        "#     try:\n",
+        "#       sorted = np.sort(unique_values)\n",
+        "#       print(\"Values are sorted\")\n",
+        "#       display(list(sorted))\n",
+        "#     except:\n",
+        "#       print(\"Could not sort values\")\n",
+        "#       display(list(unique_values))\n",
+        "#   else:\n",
+        "#     print(f\"More than {unique_values_cutoff} unique values (total: {num_unique_values})\")\n",
+        "\n",
+        "# # TACTIC B: look at the edges\n",
+        "# def look_at_edges(df, column_name):\n",
+        "#   # inner function\n",
+        "#   def show_head_and_tail(values):\n",
+        "#       num_items_to_slice = 10\n",
+        "#       display(list(values)[:num_items_to_slice]) \n",
+        "#       display(list(values)[-num_items_to_slice:]) \n",
+        "#   column = df[column_name]\n",
+        "#   unique_values = column.unique()\n",
+        "#   try: \n",
+        "#       sorted = np.sort(unique_values)\n",
+        "#       print(\"Unique values sorted, head and tail:\")\n",
+        "#       show_head_and_tail(sorted)\n",
+        "#   except TypeError as error:\n",
+        "#       print(f\"Could not sort values: {error}\")\n",
+        "#       print(\"..so let's try filtering NULL values and then sorting\")\n",
+        "#       print(\"..there could be a black sheep in the null values\")\n",
+        "#       non_null_uniques = df.loc[~df[column_name].isnull(), column_name].unique()\n",
+        "#       sorted = np.sort(non_null_uniques)\n",
+        "#       show_head_and_tail(sorted)\n",
+        "\n",
+        "# # TACTIC C: casting to a type to see if all the values match the needed type\n",
+        "# def cast_to_type(column, maybe_type):\n",
+        "#   try:\n",
+        "#     column.astype(maybe_type)\n",
+        "#     print(f\"Casting to {maybe_type} was successful\")\n",
+        "#   except ValueError as error:\n",
+        "#     print(f\"Could not cast to {maybe_type}: {error}\")\n",
+        "\n",
+        "# # TACTIC D: display the value count of the column\n",
+        "# def value_count(column):\n",
+        "#   display(column.value_counts(dropna=False))\n",
+        "\n",
+        "# # FUNCTION TO CHECK THE DATAFRAME FOR ALL FOUR TACTICS\n",
+        "# def find_non_default_missing_values(df, column_name, maybe_type):\n",
+        "#   long_separator_amount = 80\n",
+        "#   short_separator_amount = 40\n",
+        "\n",
+        "#   # Print the header\n",
+        "#   print_separator(\"*\", long_separator_amount, f\"Finding non default missing values for column \\\"{column_name}\\\"\")\n",
+        "\n",
+        "#   print(f\"Column \\\"{column_name}\\\" has datatype: {df.dtypes[column_name]}\")\n",
+        "\n",
+        "#   column = df[column_name]  \n",
+        "\n",
+        "#   # A\n",
+        "#   print_separator(\"-\", short_separator_amount, \"A: Looking at unique values\")\n",
+        "#   look_at_unique_values(column)\n",
+        "\n",
+        "#   # B\n",
+        "#   print_separator(\"-\", short_separator_amount, \"B: Sorting and looking at the edges\")\n",
+        "#   look_at_edges(df, column_name)\n",
+        "\n",
+        "#   # C\n",
+        "#   print_separator(\"-\", short_separator_amount, f\"C: Casting to type: {maybe_type}\")\n",
+        "#   cast_to_type(column, maybe_type)\n",
+        "\n",
+        "#   # D\n",
+        "#   print_separator(\"-\", short_separator_amount, \"D: Looking at frequency\\nAll default-NULL values will be bunched together as NaN\")\n",
+        "#   value_count(column)\n",
+        "#   print(\"\\n\")\n",
+        "\n",
+        "# # Function to replace non-default NULL values with default NULL values.\n",
+        "# # ⚠️ Mutates df\n",
+        "# def replace_value(df, column_name, missing_old, missing_new):\n",
+        "#   df[column_name] = df[column_name].replace({missing_old: missing_new})\n",
+        "\n",
+        "# # Function to display the default NULL values in the column.\n",
+        "# def display_default_null_values(df, column_name):\n",
+        "#   nulls = df.loc[df[column_name].isnull()]\n",
+        "#   print(f\"Number of default null values in \\\"{column_name}\\\": {len(nulls)}\")\n",
+        "\n",
+        "# # Easier to type\n",
+        "# nat = np.datetime64('nat')"
+      ],
+      "metadata": {
+        "id": "KQloF2w0A9R9"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Making a deep copy of the dataframe.\n",
+        "# I understand that it is usually not advised to make a copy but instead work in the original dataframe.\n",
+        "# However, for this assignment I would like to be able to use this later for reference. \n",
+        "# Having a copy makes it easier to later on see what is changed and what not.\n",
+        "\n",
+        "# attacks_clean = attacks_drop_rows.copy(deep=True)"
+      ],
+      "metadata": {
+        "id": "X3ur0X6Gcm5_"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# attacks_clean"
+      ],
+      "metadata": {
+        "id": "qJUXa2xVyZjT"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Displaying information on the columns, their types and the count of non-null values.\n",
+        "\n",
+        "# attacks_clean.info()\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "SfpsFP19sOOr"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# # Lowercase all strings and strip whitespace and/or quotationmarks around strings\n",
+        "\n",
+        "# attacks_clean = attacks_clean.applymap(lambda x: x.lower() if isinstance(x, str) else x)\n",
+        "# attacks_clean = attacks_clean.applymap(lambda x: x.strip('\" ') if isinstance(x, str) else x)"
+      ],
+      "metadata": {
+        "id": "kPjRIZ-mBVG1"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Check column 'Case' for missing values\n",
+        "\n",
+        "# find_non_default_missing_values(attacks_clean, 'Case', 'string')\n",
+        "\n",
+        "# Check the non-unique values to see what is going on.\n",
+        "\n",
+        "# attacks_clean[attacks_clean.duplicated('Case', keep=False)]\n",
+        "\n",
+        "# They might indicatie cases where more then one person was attacked. \n",
+        "# The columns regarding location and time might help here\n",
+        "# Since there are few and they seem irrelevant to our questions I will leave them for now\n",
+        "\n",
+        "# DONE"
+      ],
+      "metadata": {
+        "id": "OHJZ0AjBDFtw"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Check column 'Type' for missing values\n",
+        "\n",
+        "# find_non_default_missing_values(attacks_clean, 'Type', 'string')\n",
+        "\n",
+        "# Changing NaN to None and the different spellings of boat accidents to boat.\n",
+        "\n",
+        "# attacks_clean = attacks_clean.replace({'Type' : {np.nan : None, 'Boating' : 'Boat', 'Boatomg' : 'Boat'}})\n",
+        "\n",
+        "# DONE"
+      ],
+      "metadata": {
+        "id": "92ECb335COH6"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Check column 'Activity' for missing values\n",
+        "\n",
+        "# find_non_default_missing_values(attacks_clean, 'Activity', 'string')\n",
+        "\n",
+        "# Replacing with default values where needed\n",
+        "# attacks_clean['Activity'] = attacks_clean['Activity'].replace({'.': None})\n",
+        "\n",
+        "# DONE\n"
+      ],
+      "metadata": {
+        "id": "WgjnS6x-mZMD"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Check column 'Injury' for missing values\n",
+        "\n",
+        "# find_non_default_missing_values(attacks_clean, 'Injury', 'string')\n",
+        "\n",
+        "# DONE for now"
+      ],
+      "metadata": {
+        "id": "dDBR03O1mZAh"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Check column 'Species' for missing values\n",
+        "\n",
+        "# find_non_default_missing_values(attacks_clean, 'Species', 'string')"
+      ],
+      "metadata": {
+        "id": "x2drV6szmYtv"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Condensing all values to only the species\n",
+        "\n",
+        "# All unique values in this column: \n",
+        "# species_old = attacks_clean['Species'].unique()\n",
+        "# species_old"
+      ],
+      "metadata": {
+        "id": "T_EOpmpqQwDL"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Thinking steps\n",
+        "# I need to fill a new column with: \n",
+        "# if the word 'shark' occurs once: extract the word before 'shark' and display that plus 'shark'\n",
+        "# else: display 'needs looking at'\n"
+      ],
+      "metadata": {
+        "id": "rpcrf-kJT2t_"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Return nurse shark\n",
+        "# string = 'said to involve a grey nurse shark that leapt out of the water and  seized the boy but species identification is questionable'\n",
+        "# word7 = \"(\\S+\\s)?shark\" # nurse shark\n",
+        "\n",
+        "# species = re.search(word7, string)\n",
+        "# species.group()"
+      ],
+      "metadata": {
+        "id": "I8sfQ14_V2LN"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Check column 'Fatal' for missing values\n",
+        "\n",
+        "# find_non_default_missing_values(attacks_clean, 'Fatal', 'bool')\n",
+        "\n",
+        "# display(attacks_clean.loc[(attacks_clean['Fatal']== False) | (attacks_clean['Fatal']== True)])\n",
+        "\n",
+        "# Replacing values that are clear about their meaning with their boolean equivalents \n",
+        "\n",
+        "# attacks_clean['Fatal'] = attacks_clean['Fatal'].replace(dict.fromkeys(['y'], True))\n",
+        "# attacks_clean['Fatal'] = attacks_clean['Fatal'].replace(dict.fromkeys(['n'], False))\n",
+        "# replace_value(attacks_clean, 'Fatal', 'y', True)\n",
+        "# replace_value(attacks_clean, 'Fatal', 'n', False)\n",
+        "\n",
+        "# Change values that are not clear to None for now, might remove them later.\n",
+        "# df[column_name].replace({missing_old: missing_new})\n",
+        "\n",
+        "# non_bool = attacks_clean.loc[~((attacks_clean['Fatal'] == False) | (attacks_clean['Fatal'] == True))]\n",
+        "# attacks_clean['Fatal'] = attacks_clean['Fatal'].replace({missing_old: missing_new})\n",
+        "# attacks_clean['Fatal'] = attacks_clean.loc[~((attacks_clean['Fatal'] == False) | (attacks_clean['Fatal'] == True))] = None\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "gN1gTV49mY6S"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Check column 'Age' for missing values\n",
+        "\n",
+        "# find_non_default_missing_values(attacks_clean, 'Age', 'string')\n",
+        "\n",
+        "# Strip the leading/trailing whitespace and quotation marks.\n",
+        "\n",
+        "# attacks_clean['Age'] = attacks_clean['Age'].str.strip('\"\\' \\()\\\\')\n",
+        "\n",
+        "# Replace \\xa0 and np.nan with None\n",
+        "# attacks_clean['Age'] = attacks_clean['Age'].replace(dict.fromkeys(['\\xa0',np.nan], None))\n",
+        "\n",
+        "# There are a lot of unclear ages. Since we want to know if there is a difference \n",
+        "# between children and adults I think it is best to divide them into adult and child\n",
+        "\n",
+        "# Transform the column so all clear numericals are in the right categories\n",
+        "# attacks_clean.transform({'Age': str.capitalize, \"price\": lambda price: round(price * 1.1)})\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "jYP4iWyvmZF7"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
