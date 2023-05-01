@@ -1,1 +1,1 @@
-Assignments and their needen components.
+Assignments and their needed components.
